@@ -1,0 +1,21 @@
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[packages]
+requests = ">=2.31.0"
+beautifulsoup4 = ">=4.12.2"
+pandas = ">=2.0.3"
+lxml = ">=4.9.3"
+
+[dev-packages]
+pytest = "*"
+flake8 = "*"
+black = "*"
+
+[requires]
+python_version = "3.12"
+
+[scripts]
+scrape = "python src/main.py"
