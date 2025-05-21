@@ -8,6 +8,7 @@ requests = ">=2.31.0"
 beautifulsoup4 = ">=4.12.2"
 pandas = ">=2.0.3"
 lxml = ">=4.9.3"
+playwright = "*"
 
 [dev-packages]
 pytest = "*"
