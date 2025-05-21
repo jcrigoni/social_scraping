@@ -42,130 +42,40 @@ class UrlebirdScraper:
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:88.0) Gecko/20100101 Firefox/88.0'
     ]
     
-    # Sélecteurs CSS multiples pour différents éléments
     SELECTORS = {
-        'video_card': [
-            # Sélecteurs originaux
-            'div.video-card',
-            '.video-item',
-            '.tiktok-video-item',
-            '.video-container',
-            # Nouveaux sélecteurs à essayer
-            '.video-feed-item',
-            '.feed-item',
-            '.tiktok-feed-item',
-            '.video-post',
-            '.tiktok-post',
-            '.video-entry',
-            '.video-box',
-            'article.video',
-            'div[data-video-id]',
-            '.content-item',
-            '.post-item',
-            # Sélecteurs très génériques en dernier recours
-            '.card',
-            '.item'
-        ],
-        'title': [
-            # Sélecteurs originaux
-            'h3.video-card-title a',
-            '.video-title a',
-            '.title a',
-            'h2.video-name a',
-            # Nouveaux sélecteurs à essayer
-            '.video-caption',
-            '.caption',
-            '.description',
-            '.video-description',
-            'p.title',
-            '.post-title',
-            '.video-text',
-            'h2 a',
-            'h3 a',
-            'h4 a',
-            'a.title',
-            '.content-title'
-        ],
-        'thumbnail': [
-            # Sélecteurs originaux
-            'img.video-card-thumbnail',
-            'img.thumbnail',
-            '.video-img img',
-            '.video-thumbnail img',
-            # Nouveaux sélecteurs à essayer
-            '.post-thumbnail img',
-            '.media-thumbnail img',
-            '.preview-image',
-            '.video-preview img',
-            'div.thumbnail img',
-            '.image-container img',
-            '.media img',
-            'video',
-            'video[poster]',
-            '.cover-image',
-            'img.cover',
-            '.image img'
-        ],
-        'author': [
-            # Sélecteurs originaux
-            'a.video-card-author',
-            '.video-author a',
-            '.author-name a',
-            '.creator-name',
-            # Nouveaux sélecteurs à essayer
-            '.username',
-            '.user-name',
-            '.creator a',
-            '.profile-link',
-            '.user-link',
-            '.account-name',
-            '.poster-name',
-            '.user-info a',
-            '.account a',
-            '.author-link',
-            '.tiktok-author'
-        ],
-        'date': [
-            # Sélecteurs originaux
-            'span.video-card-date',
-            '.video-date',
-            '.publish-date',
-            '.date-info',
-            # Nouveaux sélecteurs à essayer
-            '.timestamp',
-            '.time',
-            '.post-date',
-            '.published-on',
-            '.creation-time',
-            '.posted-on',
-            '.upload-date',
-            '.meta-date',
-            'time',
-            '[datetime]',
-            '.date',
-            '.post-time'
-        ],
-        'stats': [
-            # Sélecteurs originaux
-            'div.video-card-stats',
-            '.video-stats',
-            '.engagement-stats',
-            '.metrics',
-            # Nouveaux sélecteurs à essayer
-            '.stats',
-            '.counters',
-            '.engagement',
-            '.numbers',
-            '.interaction-stats',
-            '.post-stats',
-            '.stats-counter',
-            '.likes-comments',
-            '.video-metrics',
-            '.media-stats',
-            '.stats-wrapper',
-            '.interactions'
-        ]
-    }
+    'video_card': [
+        'div.thumb',          # Chaque carte de vidéo est un conteneur "thumb"
+        'div.wb',             # Combine parfois avec "wb"
+        'div.img',            # Contient l’image
+        'div.stats'           # Contient les stats, peut servir d'ancrage
+    ],
+    'title': [
+        'div.info3 a span',   # Texte du lien vers la vidéo
+        'div.info3 > a',      # Lien avec texte partiel
+    ],
+    'thumbnail': [
+        'div.img img',        # Image de prévisualisation
+        'img.img-fluid',      # Classe très utilisée
+        'img[alt^="@"]',      # Image de profil ou d’auteur
+    ],
+    'author': [
+        'div.author-name a',  # Auteur dans le bloc info
+        'div.author img[alt]', # Image avec alt = nom d'utilisateur
+        'div.author a',        # Lien autour de l’image d’auteur
+    ],
+    'date': [
+        'div.stats i.fa-clock + span',  # Icône + texte juste après
+        'div.stats span:has(i.fa-clock)',  # Plus générique
+    ],
+    'stats': [
+        'div.stats',                  # Bloc contenant tous les chiffres
+        'div.stats span',             # Chaque élément
+        'div.stats i.fa-play + span',     # Vues
+        'div.stats i.fa-heart + span',    # Likes
+        'div.stats i.fa-comment + span',  # Commentaires
+    ]
+}
+
     
     def __init__(self, 
                 delay_between_requests: float = 2.0, 
@@ -778,29 +688,75 @@ class UrlebirdScraper:
         video_info = {
             'title': '',
             'url': '',
+            'video_id': '',  # Nouvel identifiant pour stocker l'ID unique de la vidéo
             'thumbnail': '',
             'author': '',
             'author_url': '',
             'date': None,
             'date_raw': '',  # Stocker la date brute pour débogage
+            'timestamp': '',  # Stocke le texte original du timestamp (ex: "1 day ago")
             'views': 0,
+            'views_raw': '',  # Stocke le texte original des vues (ex: "8.66M")
             'likes': 0,
+            'likes_raw': '',  # Stocke le texte original des likes (ex: "1.4M")
             'comments': 0,
+            'comments_raw': '',  # Stocke le texte original des commentaires (ex: "8.43K")
             'shares': 0,
             'hashtags': []
         }
         
         try:
-            # Extraction du titre et de l'URL de la vidéo avec des sélecteurs multiples
-            title_element = self._find_element_with_selectors(video_element, self.SELECTORS['title'])
-            if title_element:
-                video_info['title'] = self._clean_text(title_element.text)
-                # S'assurer que l'URL est absolue
-                href = title_element.get('href', '')
-                if href:
-                    video_info['url'] = href if href.startswith('http') else self.BASE_URL + href
+            # 1. Extraction des différentes URL de la vidéo
+            # D'abord chercher dans info3 > a (URL principale de la vidéo)
+            info_div = video_element.select_one('.info3')
+            if info_div:
+                # Chercher le lien direct vers la vidéo (généralement après l'author-name)
+                video_link = info_div.select_one('a:not(.author-name)')
+                if video_link and 'href' in video_link.attrs:
+                    href = video_link.get('href', '')
+                    if href:
+                        video_info['url'] = href if href.startswith('http') else self.BASE_URL + href
+                        
+                        # Extraire l'ID de la vidéo à partir de l'URL
+                        # Format: https://urlebird.com/video/titre-ID/ ou https://urlebird.com/video/ID/
+                        url_parts = href.strip('/').split('/')
+                        if len(url_parts) >= 2:
+                            # Prendre la dernière partie de l'URL qui devrait être "titre-ID" ou "ID"
+                            last_part = url_parts[-1]
+                            # Extraire seulement les chiffres à la fin pour l'ID
+                            id_match = re.search(r'(\d+)$', last_part)
+                            if id_match:
+                                video_info['video_id'] = id_match.group(1)
+                            elif re.match(r'^\d+$', last_part):  # Si toute la dernière partie est numérique
+                                video_info['video_id'] = last_part
             
-            # Extraction de la vignette avec des sélecteurs multiples
+            # Si nous n'avons pas encore trouvé l'URL, essayons la méthode classique avec le titre
+            if not video_info['url']:
+                title_element = self._find_element_with_selectors(video_element, self.SELECTORS['title'])
+                if title_element:
+                    video_info['title'] = self._clean_text(title_element.text)
+                    href = title_element.get('href', '')
+                    if href:
+                        video_info['url'] = href if href.startswith('http') else self.BASE_URL + href
+                        
+                        # Extraire l'ID si ce n'est pas encore fait
+                        if not video_info['video_id']:
+                            url_parts = href.strip('/').split('/')
+                            if len(url_parts) >= 2:
+                                last_part = url_parts[-1]
+                                id_match = re.search(r'(\d+)$', last_part)
+                                if id_match:
+                                    video_info['video_id'] = id_match.group(1)
+                                elif re.match(r'^\d+$', last_part):
+                                    video_info['video_id'] = last_part
+            
+            # 2. Chercher aussi le titre si non encore trouvé
+            if not video_info['title'] and info_div:
+                link_with_title = info_div.select_one('a:not(.author-name)')
+                if link_with_title:
+                    video_info['title'] = self._clean_text(link_with_title.text)
+            
+            # 3. Extraction de la vignette avec des sélecteurs multiples
             thumbnail_element = self._find_element_with_selectors(video_element, self.SELECTORS['thumbnail'])
             if thumbnail_element:
                 # Essayer différents attributs pour l'URL de la vignette
@@ -809,7 +765,7 @@ class UrlebirdScraper:
                         video_info['thumbnail'] = thumbnail_element[attr]
                         break
             
-            # Extraction des informations de l'auteur
+            # 4. Extraction des informations de l'auteur
             author_element = self._find_element_with_selectors(video_element, self.SELECTORS['author'])
             if author_element:
                 video_info['author'] = self._clean_text(author_element.text)
@@ -817,28 +773,77 @@ class UrlebirdScraper:
                 if href:
                     video_info['author_url'] = href if href.startswith('http') else self.BASE_URL + href
             
-            # Extraction de la date
-            date_element = self._find_element_with_selectors(video_element, self.SELECTORS['date'])
-            if date_element:
-                date_str = self._clean_text(date_element.text)
-                video_info['date_raw'] = date_str  # Stocker pour débogage
-                video_info['date'] = self._parse_date(date_str)
+            # Alternative pour l'auteur via div.author-name > a
+            if not video_info['author'] and info_div:
+                author_name_div = info_div.select_one('.author-name a')
+                if author_name_div:
+                    video_info['author'] = self._clean_text(author_name_div.text)
+                    href = author_name_div.get('href', '')
+                    if href:
+                        video_info['author_url'] = href if href.startswith('http') else self.BASE_URL + href
             
-            # Extraction des statistiques vidéo (vues, likes, etc.)
-            stats_elements = video_element.select(','.join(self.SELECTORS['stats']))
-            for stat in stats_elements:
-                stat_text = stat.text.strip().lower()
-                
-                if 'views' in stat_text or 'vue' in stat_text:
-                    video_info['views'] = self._extract_number(stat_text)
-                elif 'likes' in stat_text or 'j\'aime' in stat_text:
-                    video_info['likes'] = self._extract_number(stat_text)
-                elif 'comments' in stat_text or 'commentaire' in stat_text:
-                    video_info['comments'] = self._extract_number(stat_text)
-                elif 'shares' in stat_text or 'partage' in stat_text:
-                    video_info['shares'] = self._extract_number(stat_text)
+            # 5. Extraction des statistiques (date, vues, likes, commentaires)
+            stats_div = video_element.select_one('.stats')
+            if stats_div:
+                # Parcourir tous les éléments de statistiques
+                stats_items = stats_div.select('.flex.items-center')
+                for stat in stats_items:
+                    stat_text = stat.text.strip()
+                    
+                    # Analyser selon l'icône présente
+                    if stat.select_one('.fa-clock'):
+                        video_info['timestamp'] = self._clean_text(stat_text.replace('fa-clock', ''))
+                        video_info['date_raw'] = video_info['timestamp']
+                        video_info['date'] = self._parse_date(video_info['timestamp'])
+                    
+                    elif stat.select_one('.fa-play'):
+                        views_text = self._clean_text(stat_text.replace('fa-play', ''))
+                        video_info['views_raw'] = views_text
+                        video_info['views'] = self._extract_number(views_text)
+                    
+                    elif stat.select_one('.fa-heart'):
+                        likes_text = self._clean_text(stat_text.replace('fa-heart', ''))
+                        video_info['likes_raw'] = likes_text
+                        video_info['likes'] = self._extract_number(likes_text)
+                    
+                    elif stat.select_one('.fa-comment'):
+                        comments_text = self._clean_text(stat_text.replace('fa-comment', ''))
+                        video_info['comments_raw'] = comments_text
+                        video_info['comments'] = self._extract_number(comments_text)
+                    
+                    elif stat.select_one('.fa-share') or 'share' in stat_text.lower() or 'partage' in stat_text.lower():
+                        video_info['shares'] = self._extract_number(stat_text)
             
-            # Extraction des hashtags du titre
+            # Méthode alternative si la méthode ci-dessus n'a pas fonctionné
+            if not stats_div or (not video_info['views'] and not video_info['likes'] and not video_info['comments']):
+                stats_elements = video_element.select(','.join(self.SELECTORS['stats']))
+                for stat in stats_elements:
+                    stat_text = stat.text.strip().lower()
+                    
+                    if 'clock' in stat_text or 'ago' in stat_text:
+                        video_info['timestamp'] = self._clean_text(stat_text)
+                        video_info['date_raw'] = video_info['timestamp']
+                        video_info['date'] = self._parse_date(video_info['timestamp'])
+                    
+                    elif 'views' in stat_text or 'vue' in stat_text or 'play' in stat_text:
+                        views_text = self._clean_text(stat_text)
+                        video_info['views_raw'] = views_text
+                        video_info['views'] = self._extract_number(views_text)
+                    
+                    elif 'likes' in stat_text or 'j\'aime' in stat_text or 'heart' in stat_text:
+                        likes_text = self._clean_text(stat_text)
+                        video_info['likes_raw'] = likes_text
+                        video_info['likes'] = self._extract_number(likes_text)
+                    
+                    elif 'comments' in stat_text or 'commentaire' in stat_text or 'comment' in stat_text:
+                        comments_text = self._clean_text(stat_text)
+                        video_info['comments_raw'] = comments_text
+                        video_info['comments'] = self._extract_number(comments_text)
+                    
+                    elif 'shares' in stat_text or 'partage' in stat_text:
+                        video_info['shares'] = self._extract_number(stat_text)
+            
+            # 6. Extraction des hashtags du titre
             if video_info['title']:
                 video_info['hashtags'] = self._extract_hashtags(video_info['title'])
                 
@@ -846,8 +851,8 @@ class UrlebirdScraper:
             logger.error(f"Erreur lors de l'extraction des informations de la vidéo: {e}")
         
         # Validation basique
-        if not video_info['url'] or not video_info['title']:
-            logger.warning("Informations de vidéo incomplètes extraites")
+        if not video_info['url']:
+            logger.warning("URL de vidéo non trouvée")
         
         return video_info
     
@@ -899,7 +904,7 @@ class UrlebirdScraper:
                 html_content = response['html']
                 soup = BeautifulSoup(html_content, 'lxml')
                 
-                # Extraire les vidéos du HTML fourni
+                # Extraire les vidéos du HTML fourni (pas les videos)
                 videos = []
                 for selector in self.SELECTORS['video_card']:
                     video_elements = soup.select(selector)
@@ -1157,15 +1162,42 @@ class UrlebirdScraper:
         # Convertir en DataFrame
         df = pd.DataFrame(videos)
         
+        # Définir l'ordre des colonnes pour le CSV avec priorité aux champs demandés
+        # Les champs essentiels d'abord: URL, ID, timestamp, vues, likes, commentaires
+        priority_columns = [
+            'url',               # URL complète de la vidéo
+            'video_id',          # ID unique de la vidéo
+            'timestamp',         # Texte du timestamp tel qu'affiché (ex: "1 day ago")
+            'views_raw',         # Texte brut des vues (ex: "8.66M")
+            'likes_raw',         # Texte brut des likes (ex: "1.4M")
+            'comments_raw',      # Texte brut des commentaires (ex: "8.43K")
+            'views',             # Nombre de vues (converti en entier)
+            'likes',             # Nombre de likes (converti en entier)
+            'comments',          # Nombre de commentaires (converti en entier)
+            'title',             # Titre de la vidéo
+            'author',            # Auteur de la vidéo
+            'author_url',        # URL du profil de l'auteur
+            'date',              # Date de publication parsée
+            'shares',            # Nombre de partages
+            'thumbnail',         # URL de la vignette
+            'hashtags'           # Hashtags (convertis en chaîne)
+        ]
+        
+        # Filtrer les colonnes existantes
+        columns = [col for col in priority_columns if col in df.columns]
+        
+        # Ajouter toute colonne restante non listée explicitement
+        remaining_columns = [col for col in df.columns if col not in priority_columns and col != 'date_raw']
+        columns.extend(remaining_columns)
+        
+        # Réorganiser les colonnes selon notre ordre
+        df = df[columns]
+        
         # Convertir date en format chaîne
         if 'date' in df.columns:
             df['date'] = df['date'].apply(
                 lambda x: x.strftime('%Y-%m-%d') if x else None
             )
-        
-        # Supprimer la colonne date_raw utilisée pour le débogage
-        if 'date_raw' in df.columns:
-            df = df.drop(columns=['date_raw'])
         
         # Convertir la liste de hashtags en chaîne séparée par des virgules
         if 'hashtags' in df.columns:
@@ -1184,3 +1216,5 @@ class UrlebirdScraper:
             logger.info(f"- Moyenne des likes: {df['likes'].mean():.1f}")
         if 'author' in df.columns:
             logger.info(f"- Nombre d'auteurs uniques: {df['author'].nunique()}")
+        if 'video_id' in df.columns:
+            logger.info(f"- Nombre de vidéos avec ID extrait: {df['video_id'].count()}")
