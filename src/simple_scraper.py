@@ -5,6 +5,8 @@ import re
 import time
 import random
 import os
+import datetime
+from dateutil.relativedelta import relativedelta
 from logger import setup_logger
 
 # Configure logging
@@ -97,6 +99,70 @@ class SocialScraper:
             return id_match.group(1)
         return ""
     
+    def _convert_relative_time(self, relative_time_text):
+        """
+        Converts a relative time expression (e.g., "3 days ago") to a datetime object.
+        
+        Args:
+            relative_time_text: String with relative time expression
+            
+        Returns:
+            Datetime object or None if parsing fails
+        """
+        if not relative_time_text:
+            return None
+            
+        now = datetime.datetime.now()
+        text = relative_time_text.lower().strip()
+        
+        try:
+            # Extract the number and time unit using regex
+            match = re.match(r'(\d+)\s+([a-z]+)', text)
+            if match:
+                value = int(match.group(1))
+                unit = match.group(2)
+                
+                # Handle different time units
+                if 'year' in unit:
+                    return now - relativedelta(years=value)
+                elif 'month' in unit:
+                    return now - relativedelta(months=value)
+                elif 'week' in unit:
+                    return now - relativedelta(weeks=value)
+                elif 'day' in unit:
+                    return now - relativedelta(days=value)
+                elif 'hour' in unit:
+                    return now - relativedelta(hours=value)
+                elif 'minute' in unit:
+                    return now - relativedelta(minutes=value)
+                elif 'second' in unit:
+                    return now - relativedelta(seconds=value)
+            
+            # Handle special cases like "a day ago" or "an hour ago"
+            if text.startswith('a ') or text.startswith('an '):
+                unit = text.split(' ')[1]
+                
+                if 'year' in unit:
+                    return now - relativedelta(years=1)
+                elif 'month' in unit:
+                    return now - relativedelta(months=1)
+                elif 'week' in unit:
+                    return now - relativedelta(weeks=1)
+                elif 'day' in unit:
+                    return now - relativedelta(days=1)
+                elif 'hour' in unit:
+                    return now - relativedelta(hours=1)
+                elif 'minute' in unit:
+                    return now - relativedelta(minutes=1)
+                elif 'second' in unit:
+                    return now - relativedelta(seconds=1)
+                    
+            logger.warning(f"Could not parse relative time: {relative_time_text}")
+            return None
+        except Exception as e:
+            logger.error(f"Error parsing relative time '{relative_time_text}': {e}")
+            return None
+            
     def _extract_number(self, text):
         """
         Extracts a numeric value from text, handling K, M suffixes.
@@ -160,7 +226,7 @@ class SocialScraper:
                 break
             
             # Save a copy for debugging
-            self._save_debug_html(soup, f"debug_page_{hashtag}.html")
+            self._save_debug_html(soup, f"debug_page/debug_page_{hashtag}.html")
             
             # Find the container with the video cards
             thumbs_container = soup.select_one('#thumbs')
@@ -223,6 +289,9 @@ class SocialScraper:
         Returns:
             Dictionary with video information or None if extraction fails
         """
+        # Get current time for scraping timestamp
+        now = datetime.datetime.now()
+        
         video_info = {
             'url': '',
             'video_id': '',
@@ -235,7 +304,9 @@ class SocialScraper:
             'comments': 0,
             'title': '',
             'author': '',
-            'author_url': ''
+            'author_url': '',
+            'scrape_time': now.strftime('%Y-%m-%d %H:%M:%S'),
+            'estimated_release_time': ''
         }
         
         try:
@@ -293,8 +364,14 @@ class SocialScraper:
                 timestamp_element = stats_div.select_one('.fa-clock')
                 if timestamp_element and timestamp_element.parent:
                     timestamp_text = timestamp_element.parent.text.strip()
-                    video_info['timestamp'] = timestamp_text.replace('fa-clock', '').strip()
-                    logger.debug(f"Extracted timestamp: {video_info['timestamp']}")
+                    timestamp_raw = timestamp_text.replace('fa-clock', '').strip()
+                    video_info['timestamp'] = timestamp_raw
+                    
+                    # Convert relative timestamp to estimated release time
+                    release_time = self._convert_relative_time(timestamp_raw)
+                    if release_time:
+                        video_info['estimated_release_time'] = release_time.strftime('%Y-%m-%d %H:%M:%S')
+                    logger.debug(f"Extracted timestamp: {video_info['timestamp']} -> {video_info['estimated_release_time']}")
                 
                 # Views (play icon)
                 views_element = stats_div.select_one('.fa-play')
@@ -372,18 +449,20 @@ class SocialScraper:
         
         # Define column order with priority columns first
         priority_columns = [
-            'url',           # Video URL
-            'video_id',      # Extracted ID
-            'timestamp',     # Raw timestamp text
-            'views_raw',     # Raw views value
-            'likes_raw',     # Raw likes value
-            'comments_raw',  # Raw comments value
-            'views',         # Numeric views
-            'likes',         # Numeric likes
-            'comments',      # Numeric comments
-            'title',         # Video title
-            'author',        # Author name
-            'author_url'     # Author profile URL
+            'url',                    # Video URL
+            'video_id',               # Extracted ID
+            'scrape_time',            # Time of scraping
+            'timestamp',              # Raw timestamp text (e.g., "3 days ago")
+            'estimated_release_time', # Estimated datetime of video release
+            'views_raw',              # Raw views value
+            'likes_raw',              # Raw likes value
+            'comments_raw',           # Raw comments value
+            'views',                  # Numeric views
+            'likes',                  # Numeric likes
+            'comments',               # Numeric comments
+            'title',                  # Video title
+            'author',                 # Author name
+            'author_url'              # Author profile URL
         ]
         
         # Reorder columns to match priority (if they exist)
