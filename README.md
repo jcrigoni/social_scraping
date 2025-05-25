@@ -1,92 +1,172 @@
-# Urlebird Scraper
+# TikTok Scraper
 
-Un outil de scraping pour extraire des vidéos TikTok depuis urlebird.com en fonction des hashtags.
+A scraping tool to extract TikTok videos based on hashtags.
 
-## Fonctionnalités
+## Features
 
-- Recherche de vidéos par hashtag
-- Filtrage des résultats par dates
-- Extraction complète des métadonnées (titre, auteur, date, statistiques, etc.)
-- Gestion robuste des erreurs et mécanisme de retry
-- Support du chargement AJAX avec le bouton "Load More"
-- Sauvegarde CSV des résultats
-- Sauvegarde incrémentale (option)
-- Génération de statistiques (option)
-- Support des proxies
+- Search videos by hashtag
+- Filter results by date range
+- Extract complete metadata (author, views, likes, comments, etc.)
+- Extract full descriptions and hashtags (with enhanced scraper)
+- Robust error handling and retry mechanisms
+- Support for AJAX-based "Load More" functionality
+- CSV output of results
+- Dual implementation:
+  - Simple scraper (HTTP) for quick extractions
+  - Enhanced scraper (browser-based) for complete extractions
 
-## Prérequis
+## Requirements
 
 - Python 3.7+
-- Bibliothèques: requests, beautifulsoup4, lxml, pandas, python-dateutil
+- Libraries: requests, beautifulsoup4, lxml, pandas, python-dateutil
+- For the enhanced scraper: playwright
 
 ## Installation
 
 ```bash
-# Cloner le dépôt
-git clone <url-du-repo>
+# Clone the repository
+git clone <repo-url>
 cd social_scraping
 
-# Installer les dépendances
+# Install dependencies
 pip install -r requirements.txt
+
+# For the enhanced scraper, install playwright
+pip install playwright
+python -m playwright install chromium
 ```
 
-## Utilisation
+## Usage
 
-### Ligne de commande
+The project includes two scrapers to choose from depending on your needs:
+
+### Simple Scraper (Fast)
 
 ```bash
-python src/main.py --hashtag "parisfood" --max-pages 3 --output "data/parisfood_videos.csv"
+# Basic usage
+python src/simple_scraper.py --hashtag dance
+
+# With date filtering
+python src/simple_scraper.py --hashtag dance --start-date 2023-01-01 --end-date 2023-12-31
+
+# Specify output file
+python src/simple_scraper.py --hashtag dance --output data/dance_videos.csv
+
+# Increase number of pages
+python src/simple_scraper.py --hashtag dance --max-pages 10
 ```
 
-### Options disponibles
+### Enhanced Scraper (Complete)
 
-- `--hashtag` : Hashtag à rechercher (obligatoire)
-- `--start-date` : Date de début au format YYYY-MM-DD
-- `--end-date` : Date de fin au format YYYY-MM-DD
-- `--output` : Chemin du fichier CSV de sortie (défaut: data/results.csv)
-- `--max-pages` : Nombre maximum de pages à scraper (défaut: 5)
-- `--delay` : Délai entre les requêtes en secondes (défaut: 2.0)
-- `--incremental-save` : Sauvegarder les résultats de manière incrémentale
-- `--proxy` : Proxy HTTP à utiliser (format: http://user:pass@host:port)
-- `--save-stats` : Générer un résumé statistique dans un fichier séparé
+The enhanced scraper uses a headless browser to retrieve full descriptions and all hashtags.
 
-### Exemple de code
+```bash
+# Basic usage
+python src/enhanced_scraper.py --hashtag dance
+
+# With multiple pages and custom output
+python src/enhanced_scraper.py --hashtag dance --max-pages 3 --output data/dance_results.csv
+
+# Adjust delay between requests
+python src/enhanced_scraper.py --hashtag dance --delay 3.0
+
+# Disable description enrichment (faster but incomplete descriptions)
+python src/enhanced_scraper.py --hashtag dance --no-enrich
+```
+
+### Available Options
+
+#### Simple Scraper
+
+- `--hashtag` : Hashtag to search for (required)
+- `--start-date` : Start date in YYYY-MM-DD format
+- `--end-date` : End date in YYYY-MM-DD format
+- `--output` : Path to output CSV file (default: data/results.csv)
+- `--max-pages` : Maximum number of pages to scrape (default: 5)
+- `--delay` : Delay between requests in seconds (default: 2.0)
+
+#### Enhanced Scraper
+
+- `--hashtag` : Hashtag to search for (required)
+- `--output` : Path to output CSV file (default: data/videos.csv)
+- `--max-pages` : Maximum number of pages to scrape (default: 1)
+- `--delay` : Delay between requests in seconds (default: 2.0)
+- `--no-enrich` : Disable enrichment of truncated descriptions
+
+### Code Example for Enhanced Scraper
 
 ```python
-from datetime import datetime
-from src.urlebird_scraper import UrlebirdScraper
+import asyncio
+from src.enhanced_scraper import EnhancedSocialScraper
 
-# Initialiser le scraper
-scraper = UrlebirdScraper(delay_between_requests=1.5)
+async def run_scraper():
+    # Initialize the scraper
+    scraper = EnhancedSocialScraper(delay_between_requests=2.0)
+    
+    # Search for videos
+    videos = await scraper.scrape_hashtag(
+        hashtag="dance",
+        max_pages=3,
+        enrich_descriptions=True
+    )
+    
+    # Save the results
+    scraper.save_to_csv(videos, "data/dance_videos.csv")
 
-# Rechercher des vidéos
-videos = scraper.search_videos(
-    hashtag="parisfood",
-    start_date=datetime(2023, 1, 1),
-    end_date=datetime(2023, 12, 31),
-    max_pages=3
-)
-
-# Sauvegarder les résultats
-scraper.save_to_csv(videos, "data/parisfood_videos.csv")
+# Run the async function
+asyncio.run(run_scraper())
 ```
 
-## Structure du code
+## Data Structure
 
-- `src/main.py` : Point d'entrée, interface en ligne de commande
-- `src/urlebird_scraper.py` : Implémentation principale du scraper
+The enhanced scraper extracts and stores the following data for each video:
 
-## Notes importantes
+| Column                 | Description                                      |
+|------------------------|--------------------------------------------------|
+| url                    | Video URL on xxxxxx.com                        |
+| video_id               | TikTok video ID                                  |
+| scrape_time            | Timestamp of the extraction                      |
+| timestamp              | Raw timestamp text (e.g., "3 days ago")          |
+| estimated_release_time | Estimated datetime of video release              |
+| views_raw              | Raw views value as displayed on the site         |
+| likes_raw              | Raw likes value as displayed on the site         |
+| comments_raw           | Raw comments value as displayed on the site      |
+| views                  | Numeric views count                              |
+| likes                  | Numeric likes count                              |
+| comments               | Numeric comments count                           |
+| author                 | Author name                                      |
+| author_url             | Author profile URL                               |
+| description_and_hashtags| Complete description text with hashtags         |
+| hashtags_str           | Comma-separated list of hashtags                 |
 
-1. Ce scraper est conçu pour le site urlebird.com qui est un agrégateur non officiel de TikTok. La structure du site peut changer.
-2. Le scraper utilise la nouvelle structure d'URL (`/hash/[hashtag]/`) et gère le bouton "Load More" pour charger plus de contenu.
-3. Des délais sont inclus entre les requêtes pour éviter d'être bloqué.
-4. La rotation des user-agents aide à éviter la détection du scraping.
+## Code Structure
 
-## To-Do / Améliorations possibles
+- `src/simple_scraper.py` : Simple HTTP-based implementation
+- `src/enhanced_scraper.py` : Enhanced browser-based implementation
+- `src/browser.py` : Browser manager for the enhanced implementation
+- `src/logger.py` : Logging configuration for all components
 
-- Améliorer la détection et l'analyse des éléments vidéo
-- Développer des tests automatisés
-- Ajouter une option pour exporter en JSON
-- Implémenter un meilleur système de détection des dates
-- Optimiser le chargement AJAX pour récupérer plus de vidéos
+## Troubleshooting
+
+If you encounter issues:
+
+1. Check the log files in the `logs` directory
+2. Examine the debug HTML files saved to the `debug_page` directory
+3. Try increasing the delay between requests if you're being rate limited
+4. For the enhanced scraper, ensure Playwright is properly installed with the required browser engines
+
+## Important Notes
+
+1. This scraper is designed for xxxxxxx.com, which is an unofficial TikTok aggregator. The site structure may change.
+2. The scraper uses the URL structure `/hash/[hashtag]/` and handles the "Load More" button to load more content.
+3. Delays are included between requests to avoid being blocked.
+4. The enhanced scraper visits individual video pages to extract full descriptions and all hashtags.
+
+## Possible Improvements
+
+- Improve detection and parsing of video elements
+- Develop automated tests
+- Add option to export to JSON
+- Implement better date detection system
+- Optimize AJAX loading to retrieve more videos
+- Add proxy support for the enhanced scraper
