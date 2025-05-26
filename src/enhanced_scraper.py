@@ -1,6 +1,6 @@
 """
 Enhanced scraper that uses headless browser for better data extraction.
-Integrates BrowserManager with SocialScraper to extract full hashtag data.
+Integrates BrowserManager with SocialScraper to extract videos data based on hashtag search.
 """
 
 import asyncio
@@ -21,7 +21,7 @@ class EnhancedSocialScraper:
     """
     Enhanced scraper for tiktok that uses a headless browser to 
     load the full page content before scraping, allowing extraction of complete
-    hashtag data and comments.
+    hashtag data.
     """
     
     BASE_URL = SCRAPER_CONFIG['BASE_URL']
@@ -47,10 +47,10 @@ class EnhancedSocialScraper:
             The extracted video ID or empty string if not found
         """
         # URL pattern is like: https://example.com/video/title-7497678636284120362/
-        id_match = re.search(r'(\d+)(?:/)?$', url)
+        id_match = re.search(r'(\d+)(?:/)?$', url) # Capture digits and reject /'s, at the end of url
         if id_match:
-            return id_match.group(1)
-        return ""
+            return id_match.group(1) # Extracts the content of the first capturing group from the regex match (\d+) = digits
+        return "" # Returns empty string
     
     def _convert_relative_time(self, relative_time_text):
         """

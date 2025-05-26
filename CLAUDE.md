@@ -6,9 +6,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 This is a Python-based web scraper for extracting TikTok video data from xxxxxx.com (a TikTok content aggregator) based on hashtags. The scraper filters by date range and extracts metadata such as video title, author, views, likes, and hashtags.
 
-The project now includes two scraper implementations:
+The project now includes multiple scraper implementations:
 1. A simple HTTP-based scraper (simple_scraper.py)
 2. An enhanced browser-based scraper (enhanced_scraper.py) that can extract full descriptions and hashtags
+3. A two-stage scraping approach:
+   - Hash page scraper (hash_scraper.py) - Stage 1: Extracts basic video data from hashtag pages
+   - Video enricher (video_enricher.py) - Stage 2: Enriches videos with full descriptions by visiting individual pages
 
 The project is designed to address several challenges:
 - Working with the specific URL structure of urlebird.com (/hash/[hashtag]/)
@@ -66,6 +69,34 @@ python src/enhanced_scraper.py --hashtag dance --delay 3.0
 python src/enhanced_scraper.py --hashtag dance --no-enrich
 ```
 
+### Running the Two-Stage Scraper (Recommended)
+
+The two-stage approach is more efficient and allows better control over the scraping process:
+
+#### Stage 1: Hash Page Scraping
+```bash
+# Basic usage - scrapes hashtag page and saves basic video data
+python src/hash_scraper.py --hashtag dance
+
+# With custom output and multiple Load More operations
+python src/hash_scraper.py --hashtag dance --output data/dance_basic.csv --max-loads 10
+
+# Adjust delay between Load More operations
+python src/hash_scraper.py --hashtag dance --delay 3.0
+```
+
+#### Stage 2: Video Enrichment
+```bash
+# Enrich videos with full descriptions from individual video pages
+python src/video_enricher.py --input data/dance_basic.csv --output data/dance_complete.csv
+
+# Adjust processing parameters
+python src/video_enricher.py --input data/dance_basic.csv --output data/dance_complete.csv --batch-size 10 --max-concurrent 5
+
+# Control delay between batches
+python src/video_enricher.py --input data/dance_basic.csv --output data/dance_complete.csv --delay 3.0
+```
+
 ### Using pipenv scripts
 
 ```bash
@@ -102,12 +133,27 @@ The scraper is now organized into multiple components:
    - Handles truncated descriptions with ellipsis ('...')
    - Provides richer data but slower performance
 
-3. **Browser Manager** (`src/browser.py`):
+3. **Two-Stage Scraping System** (Recommended):
+   - **Hash Page Scraper** (`src/hash_scraper.py`): 
+     - Stage 1: Extracts basic video metadata from hashtag pages
+     - Properly handles "Load More" button functionality with AJAX
+     - Uses Playwright to click Load More buttons and load additional content
+     - Saves intermediate data with 'needs_enrichment' flag
+     - Faster initial data collection
+   
+   - **Video Enricher** (`src/video_enricher.py`):
+     - Stage 2: Reads intermediate CSV and enriches videos with full descriptions
+     - Only processes videos that need enrichment (marked with 'needs_enrichment' flag)
+     - Visits individual video pages to extract complete descriptions and hashtags
+     - Supports batch processing and concurrent requests with rate limiting
+     - Produces final enriched dataset
+
+4. **Browser Manager** (`src/browser.py`):
    - Manages browser instantiation and page navigation
    - Handles cookies, timeouts, and retries
    - Provides rate limiting to avoid being blocked
 
-4. **Logger** (`src/logger.py`):
+5. **Logger** (`src/logger.py`):
    - Configures logging for all components
    - Saves debug information to log files
 
@@ -119,7 +165,7 @@ The scraper addresses several technical challenges:
 
 2. **Truncated Descriptions**: The enhanced scraper can detect truncated descriptions (ending with '...') and visit the video page to extract the full text.
 
-3. **AJAX Content Loading**: Implements logic to find the "Load More" button, extract its parameters, and make AJAX requests to load additional content.
+3. **AJAX Content Loading**: Implements logic to find and click the "Load More" button using Playwright, properly waiting for AJAX requests to complete and new content to load.
 
 4. **Error Handling**: Implements comprehensive error handling with retry mechanisms and backoff strategies.
 
@@ -163,7 +209,11 @@ When making changes to this codebase:
 3. Test changes thoroughly with different hashtags and date ranges
 4. Update the debug logging to help with future troubleshooting
 5. Consider adding more unit tests to improve reliability
-6. Use the enhanced scraper when full descriptions and hashtags are needed, and the simple scraper for speed
+6. Use the two-stage scraping approach for the best balance of speed and completeness:
+   - Use hash scraper for fast initial data collection
+   - Use video enricher for complete descriptions only when needed
+7. Use the simple scraper for very fast basic data collection
+8. Use the enhanced scraper when you need everything in one go (slower but complete)
 
 ## Troubleshooting
 
