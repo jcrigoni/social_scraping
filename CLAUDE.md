@@ -97,6 +97,23 @@ python src/video_enricher.py --input data/dance_basic.csv --output data/dance_co
 python src/video_enricher.py --input data/dance_basic.csv --output data/dance_complete.csv --delay 3.0
 ```
 
+### Running the Streamlit Web Interface (Recommended for Users)
+
+For a user-friendly web interface that generates Excel files:
+
+```bash
+# Install additional Streamlit requirements
+pip install -r requirements_streamlit.txt
+
+# Run the Streamlit app
+streamlit run streamlit_app.py
+```
+
+This will open a web browser with an intuitive interface where users can:
+- Enter a hashtag to scrape
+- Set the number of Load More operations (1-5)
+- Download results as an Excel file with TikTok URLs and metadata
+
 ### Using pipenv scripts
 
 ```bash
@@ -156,6 +173,13 @@ The scraper is now organized into multiple components:
 5. **Logger** (`src/logger.py`):
    - Configures logging for all components
    - Saves debug information to log files
+
+6. **Streamlit Web Interface** (`streamlit_app.py`):
+   - User-friendly web interface for hashtag scraping
+   - Wraps around the hash_scraper.py functionality
+   - Generates Excel files with real TikTok URLs and metadata
+   - Limited to hash page scraping only (Stage 1) for simplicity
+   - Outputs: TikTok URL, estimated_release_time, views, likes, comments, description_and_hashtags, author
 
 ### Key Technical Challenges
 
