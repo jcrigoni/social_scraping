@@ -273,9 +273,22 @@ class HashPageScraper:
             except:
                 logger.warning("Page not fully idle, proceeding anyway")
             
+            # Add random human-like delays and actions before clicking
+            await asyncio.sleep(2 + (asyncio.get_event_loop().time() % 1))  # Random 2-3 second delay
+            
+            # Simulate human behavior: scroll, move mouse, etc.
+            await page.mouse.move(100, 200)
+            await asyncio.sleep(0.5)
+            
             # Scroll the button into view to make sure it's clickable
             await load_more_element.scroll_into_view_if_needed()
             await asyncio.sleep(1)
+            
+            # Move mouse near the button
+            box = await load_more_element.bounding_box()
+            if box:
+                await page.mouse.move(box['x'] + box['width']/2, box['y'] + box['height']/2)
+                await asyncio.sleep(0.5)
             
             # Count current video elements before clicking
             current_videos = await page.query_selector_all('div.thumb:not(.display-flex-semi)')
@@ -287,8 +300,22 @@ class HashPageScraper:
             async def wait_for_new_content():
                 for i in range(30):  # Wait up to 30 seconds
                     await asyncio.sleep(1)
+                    
+                    # Check if #thumbs container still exists
+                    thumbs_container = await page.query_selector('#thumbs')
+                    if not thumbs_container:
+                        logger.error(f"#thumbs container disappeared after {i+1} seconds!")
+                        # Save current page HTML for debugging
+                        current_html = await page.content()
+                        self._save_debug_html(current_html, f"debug_page/debug_missing_thumbs_{i+1}s.html")
+                        return False
+                    
                     new_videos = await page.query_selector_all('div.thumb:not(.display-flex-semi)')
                     new_count = len(new_videos)
+                    
+                    if i % 5 == 0:  # Log every 5 seconds
+                        logger.debug(f"Waiting for content... {i+1}s - Videos: {new_count} (need >{current_count})")
+                    
                     if new_count > current_count:
                         logger.info(f"New video count after Load More: {new_count} (added {new_count - current_count})")
                         return True
@@ -320,16 +347,36 @@ class HashPageScraper:
                 if success:
                     # Wait a bit more for content to load
                     await asyncio.sleep(3)
-                    await wait_for_new_content()
-            else:
+                    content_loaded = await wait_for_new_content()
+            
+            if content_loaded:
                 logger.info("New content detected, Load More was successful")
+            else:
+                logger.error("Load More failed - no new content detected")
+                # Save page state for debugging
+                debug_html = await page.content()
+                self._save_debug_html(debug_html, "debug_page/debug_failed_load_more.html")
+            
+            # Final check: verify #thumbs container still exists
+            final_thumbs = await page.query_selector('#thumbs')
+            if not final_thumbs:
+                logger.error("CRITICAL: #thumbs container missing after Load More attempt!")
+                debug_html = await page.content()
+                self._save_debug_html(debug_html, "debug_page/debug_critical_missing_thumbs.html")
+                return None
             
             # Get the updated page content
             html_content = await page.content()
             
             if html_content:
-                logger.info("Successfully loaded more content via Load More button")
-                return BeautifulSoup(html_content, 'html.parser')
+                soup = BeautifulSoup(html_content, 'html.parser')
+                # Verify the soup contains the thumbs container
+                if soup.select_one('#thumbs'):
+                    logger.info("Successfully loaded content and verified #thumbs container exists")
+                    return soup
+                else:
+                    logger.error("HTML retrieved but #thumbs container missing in parsed content")
+                    return None
             else:
                 logger.warning("Failed to get updated content after clicking Load More")
                 return None
@@ -366,12 +413,21 @@ class HashPageScraper:
             js_code = f"""
             async () => {{
                 try {{
+                    console.log('Starting AJAX Load More request...');
                     const formData = new FormData();
                     formData.append('hash', '{hash_value}');
                     formData.append('id', '{data_id}');
                     formData.append('page', '{page_num}');
                     formData.append('cursor', '{cursor}');
                     formData.append('x', '{data_x}');
+                    
+                    console.log('FormData prepared:', {{
+                        hash: '{hash_value}',
+                        id: '{data_id}',
+                        page: '{page_num}',
+                        cursor: '{cursor}',
+                        x: '{data_x}'
+                    }});
                     
                     const response = await fetch('{ajax_url}', {{
                         method: 'POST',
@@ -381,16 +437,31 @@ class HashPageScraper:
                         }}
                     }});
                     
+                    console.log('Response status:', response.status);
+                    console.log('Response ok:', response.ok);
+                    
                     if (response.ok) {{
                         const result = await response.text();
+                        console.log('Response length:', result.length);
+                        console.log('Response preview:', result.substring(0, 200));
+                        
                         // Try to append the result to the thumbs container
                         const thumbsContainer = document.getElementById('thumbs');
-                        if (thumbsContainer && result) {{
+                        if (thumbsContainer && result && result.length > 50) {{
+                            console.log('Appending content to thumbs container...');
                             thumbsContainer.insertAdjacentHTML('beforeend', result);
                             return true;
+                        }} else {{
+                            console.error('Cannot append content:', {{
+                                thumbsContainer: !!thumbsContainer,
+                                resultLength: result ? result.length : 0
+                            }});
+                            return false;
                         }}
+                    }} else {{
+                        console.error('Response not ok:', response.status, response.statusText);
+                        return false;
                     }}
-                    return false;
                 }} catch (error) {{
                     console.error('AJAX request failed:', error);
                     return false;
@@ -599,9 +670,37 @@ class HashPageScraper:
             # Use browser manager to get a page object for better Load More handling
             async with await self.browser_manager.get_browser() as browser:
                 context = await browser.new_context(
-                    user_agent=SCRAPER_CONFIG['USER_AGENT']
+                    user_agent=SCRAPER_CONFIG['USER_AGENT'],
+                    viewport={'width': 1920, 'height': 1080},
+                    extra_http_headers={
+                        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                        'Accept-Language': 'en-US,en;q=0.5',
+                        'Accept-Encoding': 'gzip, deflate',
+                        'DNT': '1',
+                        'Connection': 'keep-alive',
+                        'Upgrade-Insecure-Requests': '1'
+                    }
                 )
                 page = await context.new_page()
+                
+                # Add script to hide automation indicators
+                await page.add_init_script("""
+                    Object.defineProperty(navigator, 'webdriver', {
+                        get: () => undefined,
+                    });
+                    
+                    Object.defineProperty(navigator, 'plugins', {
+                        get: () => [1, 2, 3, 4, 5],
+                    });
+                    
+                    Object.defineProperty(navigator, 'languages', {
+                        get: () => ['en-US', 'en'],
+                    });
+                    
+                    window.chrome = {
+                        runtime: {},
+                    };
+                """)
                 
                 # Navigate to the hashtag page
                 logger.info(f"Navigating to: {hash_url}")
@@ -609,6 +708,10 @@ class HashPageScraper:
                 
                 # Handle cookie popups
                 await self.browser_manager._handle_cookies_popup(page)
+                
+                # Set up console logging to capture browser messages
+                page.on("console", lambda msg: logger.info(f"Browser console: {msg.text}"))
+                page.on("pageerror", lambda err: logger.error(f"Browser error: {err}"))
                 
                 # Get initial page content
                 html_content = await page.content()
@@ -625,8 +728,34 @@ class HashPageScraper:
                     # Find the container with video cards
                     thumbs_container = current_soup.select_one('#thumbs')
                     if not thumbs_container:
-                        logger.warning("Could not find #thumbs container")
-                        break
+                        logger.error(f"Could not find #thumbs container on load {load_count + 1}")
+                        
+                        # Wait a moment and try to get fresh page content
+                        logger.info("Waiting 3 seconds and trying to get fresh page content...")
+                        await asyncio.sleep(3)
+                        fresh_html = await page.content()
+                        fresh_soup = BeautifulSoup(fresh_html, 'html.parser')
+                        fresh_thumbs = fresh_soup.select_one('#thumbs')
+                        
+                        if fresh_thumbs:
+                            logger.info("Found #thumbs container after refresh, continuing...")
+                            current_soup = fresh_soup
+                            thumbs_container = fresh_thumbs
+                        else:
+                            # Save current page state for debugging
+                            self._save_debug_html(fresh_html, f"debug_page/debug_no_thumbs_load_{load_count + 1}.html")
+                            
+                            # Try to find alternative containers
+                            alternative_containers = fresh_soup.select('div[id*="thumb"], div[class*="thumb"], div[class*="video"], main, .content')
+                            if alternative_containers:
+                                logger.info(f"Found {len(alternative_containers)} alternative containers, trying to continue...")
+                                # Log the structure for debugging
+                                container_info = [(elem.name, elem.get('id'), elem.get('class')) for elem in alternative_containers[:5]]
+                                logger.info(f"Alternative containers: {container_info}")
+                            else:
+                                logger.error("No alternative containers found either, stopping scraping")
+                            
+                            break
                         
                     # Find all video cards, excluding ads
                     video_elements = []
@@ -662,6 +791,7 @@ class HashPageScraper:
                     
                     # Check if we should continue loading more
                     if load_count >= max_loads:
+                        logger.info(f"Reached maximum loads ({max_loads}), stopping")
                         break
                         
                     # Find and click Load More button
@@ -671,16 +801,21 @@ class HashPageScraper:
                         break
                     
                     # Load more content by clicking the button
+                    logger.info(f"Attempting Load More operation {load_count + 1}...")
                     new_soup = await self._load_more_content(page, load_more_data)
                     if not new_soup:
-                        logger.warning("Failed to load more content, stopping")
+                        logger.warning(f"Failed to load more content on attempt {load_count + 1}")
+                        logger.info("This is likely due to anti-bot protection (403 Forbidden)")
+                        logger.info("Continuing with videos already collected...")
                         break
                         
                     current_soup = new_soup
                     load_count += 1
                     
-                    # Add delay between loads
-                    await asyncio.sleep(self.delay)
+                    # Add delay between loads to be more respectful
+                    delay_time = self.delay + (load_count * 0.5)  # Increase delay with each load
+                    logger.info(f"Waiting {delay_time:.1f} seconds before next operation...")
+                    await asyncio.sleep(delay_time)
                 
                 await page.close()
                 await context.close()

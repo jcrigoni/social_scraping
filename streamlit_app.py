@@ -54,12 +54,12 @@ def process_videos_for_export(videos):
         
         export_row = {
             'tiktok_url': tiktok_url,
+            'author': video.get('author', ''),
             'estimated_release_time': video.get('estimated_release_time', ''),
             'views': video.get('views', 0),
             'likes': video.get('likes', 0),
             'comments': video.get('comments', 0),
-            'description_and_hashtags': video.get('description_and_hashtags', ''),
-            'author': video.get('author', '')
+            'description_and_hashtags': video.get('description_and_hashtags', '')
         }
         export_data.append(export_row)
     
@@ -138,8 +138,8 @@ def main():
     
     This tool extracts basic video information from hashtag pages and provides:
     - Real TikTok URLs
+    - Author names
     - Video metadata (views, likes, comments)
-    - Author information
     - Descriptions and hashtags
     - Estimated release times
     """)
@@ -301,11 +301,15 @@ def main():
         
         st.subheader("⚠️ Important Notes")
         st.markdown("""
-        - Scraping is limited to 5 loads max
-        - Each load ≈ 20 videos
+        - **Anti-Bot Protection**: Site may block Load More after 1st page
+        - First page: ~20 videos (always works)
+        - Additional loads: Limited by 403 errors
         - Process takes 1-3 minutes
-        - Respect rate limits
         - For research/analysis only
+        
+        **Expected Results:**
+        - 1 load = ~20 videos ✅
+        - 2+ loads = May be blocked ⚠️
         """)
 
 if __name__ == "__main__":

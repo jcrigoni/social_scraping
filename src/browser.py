@@ -203,7 +203,15 @@ class BrowserManager:
             async def __aenter__(self):
                 self.playwright = await async_playwright().start()
                 self.browser = await self.playwright.chromium.launch(
-                    headless=SCRAPER_CONFIG['HEADLESS']
+                    headless=SCRAPER_CONFIG['HEADLESS'],
+                    args=[
+                        '--disable-blink-features=AutomationControlled',
+                        '--disable-dev-shm-usage',
+                        '--no-sandbox',
+                        '--disable-setuid-sandbox',
+                        '--disable-web-security',
+                        '--disable-features=VizDisplayCompositor'
+                    ]
                 )
                 return self.browser
                 
